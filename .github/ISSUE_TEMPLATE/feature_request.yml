@@ -1,23 +1,25 @@
-name: Feature Request
-description: Suggest a new feature or improvement
+name: Feature request
+description: Suggest an improvement within the scope of the four mechanisms
 labels: ["enhancement"]
 body:
   - type: textarea
     id: problem
     attributes:
       label: Problem
-      description: What problem does this solve?
+      description: What operational problem does this solve?
     validations:
       required: true
   - type: textarea
     id: solution
     attributes:
       label: Proposed solution
-      description: How would you like this to work?
-    validations:
-      required: true
+      description: Which interface or class would change, and how?
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
   - type: markdown
     attributes:
       value: |
-        ---
-        Built by [santifer](https://santifer.io) — see the [architecture docs](docs/ARCHITECTURE.md) for how the system works.
+        Integrations with specific orchestrators, registries or storage systems are out of
+        scope for this repository; see [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md#scope).

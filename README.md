@@ -1,5 +1,10 @@
 # privacy-preserving-control-plane
 
+[![CI](https://github.com/gbenletoluwase/privacy-preserving-control-plane/actions/workflows/ci.yml/badge.svg)](https://github.com/gbenletoluwase/privacy-preserving-control-plane/actions/workflows/ci.yml)
+![Java 21+](https://img.shields.io/badge/Java-21%2B-007396?logo=openjdk&logoColor=white)
+![Runtime dependencies: 0](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 A control plane for the layer where cloud-native data pipelines actually break: not the
 application logic, but the orchestration around it. Four mechanisms, each useful alone,
 built to be operated together.
@@ -35,11 +40,19 @@ rather than a monitoring one.
 ## Quick start
 
 ```bash
-git clone https://github.com/<your-username>/privacy-preserving-control-plane.git
+git clone https://github.com/gbenletoluwase/privacy-preserving-control-plane.git
 cd privacy-preserving-control-plane
-mvn verify
-mvn compile exec:java -Dexec.mainClass=io.gbenle.controlplane.ControlPlaneDemo
+mvn verify                      # compile, test, coverage report in target/site/jacoco
+mvn compile exec:java           # run the end-to-end demo
 ```
+
+Or run the packaged jar directly:
+
+```bash
+java -jar target/privacy-preserving-control-plane-0.1.0.jar
+```
+
+Requires JDK 21 or newer and Maven 3.6.3 or newer; the build enforces both.
 
 The demo output:
 
@@ -211,6 +224,21 @@ into a replica count belongs in whatever operator or controller owns that concer
 Persistence. `EvidenceLog` is in memory, and the class documents what a durable
 implementation needs.
 
+## Project layout
+
+```
+src/main/java/io/gbenle/controlplane/
+├── ControlPlane.java          facade: one evaluation cycle across all four mechanisms
+├── ControlPlaneDemo.java      runnable end-to-end example
+├── predictive/                forecasters and the predictive scaler
+├── redaction/                 recognizers, overlap resolution, redaction policy
+├── governance/                promotion gate, model cards, hash-chained evidence log
+└── observability/             PSI drift detection, MAD anomaly detection
+```
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the cycle ordering, extension points,
+concurrency contracts and known limitations.
+
 ## Testing
 
 ```bash
@@ -224,6 +252,16 @@ is tested with a fixed forecaster so the scaling logic is isolated from forecast
 Redaction is checked for offset correctness when replacements differ in length, for Luhn
 rejection, for token stability, and for overlap resolution. The audit chain is checked for
 tamper detection.
+
+CI runs the same build on JDK 21 and 25 for every push and pull request, and publishes
+the JaCoCo coverage report as a build artifact.
+
+## Contributing and security
+
+Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). Because this project
+handles personal data, please report redaction bypasses and other vulnerabilities
+privately as described in [SECURITY.md](SECURITY.md). Notable changes are recorded in
+[CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

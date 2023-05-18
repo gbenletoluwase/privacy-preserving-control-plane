@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.TreeMap;
 
 /**
  * A runnable end-to-end example. Run with {@code mvn compile exec:java}.
@@ -83,7 +84,7 @@ public final class ControlPlaneDemo {
         report.redacted().forEach(r -> System.out.println("  " + r));
         System.out.println();
         System.out.println("spans matched  : " + report.totalRedactions() + " "
-                + new java.util.TreeMap<>(report.entityCounts()));
+                + new TreeMap<>(report.entityCounts()));
         System.out.println("scaling        : " + report.scaling().rationale());
         System.out.println("                 " + report.scaling().currentReplicas()
                 + " -> " + report.scaling().targetReplicas() + " replicas");
