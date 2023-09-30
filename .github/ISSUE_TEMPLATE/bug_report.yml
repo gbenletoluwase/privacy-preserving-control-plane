@@ -1,33 +1,51 @@
-name: Bug Report
-description: Report a bug in career-ops
+name: Bug report
+description: Something in the control plane behaves incorrectly
 labels: ["bug"]
 body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - predictive (forecasting / autoscaling)
+        - redaction
+        - governance (promotion gate / evidence log)
+        - observability (drift / anomaly)
+        - ControlPlane facade
+        - build / docs
+    validations:
+      required: true
   - type: textarea
     id: description
     attributes:
       label: What happened?
-      description: A clear description of the bug
+      description: A clear description of the incorrect behaviour.
     validations:
       required: true
   - type: textarea
-    id: steps
+    id: reproduce
     attributes:
-      label: Steps to reproduce
-      description: How can we reproduce this?
+      label: Minimal reproduction
+      description: The smallest input or code snippet that shows the problem. Do not paste real personal data.
+      render: java
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: Expected behavior
-      description: What should have happened?
+      label: Expected behaviour
   - type: input
-    id: os
+    id: version
     attributes:
-      label: OS
-      placeholder: "e.g., macOS 15, Ubuntu 24.04, Windows 11"
+      label: Version or commit
+      placeholder: "e.g. 0.1.0 or a1b2c3d"
+  - type: input
+    id: jdk
+    attributes:
+      label: JDK and OS
+      placeholder: "e.g. Temurin 21.0.4, macOS 15"
   - type: markdown
     attributes:
       value: |
-        ---
-        Built by [santifer](https://santifer.io) — need direct help? [Open a discussion](https://github.com/santifer/career-ops/discussions) or reach out at [santifer.io](https://santifer.io).
+        Found a security or privacy problem, such as a redaction bypass? Please follow
+        [SECURITY.md](../blob/main/SECURITY.md) instead of opening a public issue.

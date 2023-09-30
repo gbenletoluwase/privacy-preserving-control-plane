@@ -3,6 +3,7 @@ package io.gbenle.controlplane.governance;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * The declared facts about one trained model version.
@@ -36,8 +37,8 @@ public record ModelCard(
         owner = owner == null ? "" : owner;
     }
 
-    public java.util.Optional<Double> metric(String name) {
-        return java.util.Optional.ofNullable(metrics.get(name));
+    public Optional<Double> metric(String name) {
+        return Optional.ofNullable(metrics.get(name));
     }
 
     /** A short label suitable for logs, for example {@code redactor-ner:3.2.0}. */
