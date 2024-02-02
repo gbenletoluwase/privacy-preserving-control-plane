@@ -15,6 +15,9 @@ All notable changes to this project are documented here. The format follows
 ### Changed
 - Build enforces JDK 21+ and compiles with `-Xlint:all`.
 
+### Fixed
+- Block non-finite promotion metrics and reject non-finite gate thresholds.
+
 ## [0.1.0] - 2026-10-10
 
 ### Added

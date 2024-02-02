@@ -58,6 +58,45 @@ class GovernanceTest {
     }
 
     @Test
+    @DisplayName("non-finite reported metrics cannot pass either kind of threshold")
+    void blocksNonFiniteMetrics() {
+        for (double value : new double[]{Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY}) {
+            ModelCard model = card(value, NOW, "sha256:abc", "team");
+            for (PromotionGate gate : new PromotionGate[]{
+                    PromotionGate.builder().requireMetricAtLeast("f1", 0.90).build(),
+                    PromotionGate.builder().requireMetricAtMost("f1", 0.95).build()}) {
+                GateResult result = gate.evaluate(model, NOW);
+                assertFalse(result.passed(), "non-finite metric must be blocked: " + value);
+                assertEquals(1, result.failures().size());
+                assertTrue(result.failures().get(0).contains("f1"));
+                assertTrue(result.failures().get(0).contains("not finite"));
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("non-finite metric thresholds are rejected when configuring the gate")
+    void rejectsNonFiniteThresholds() {
+        for (double threshold : new double[]{Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY}) {
+            assertThrows(IllegalArgumentException.class,
+                    () -> PromotionGate.builder().requireMetricAtLeast("f1", threshold));
+            assertThrows(IllegalArgumentException.class,
+                    () -> PromotionGate.builder().requireMetricAtMost("f1", threshold));
+        }
+    }
+
+    @Test
+    @DisplayName("finite metrics exactly at their thresholds remain valid")
+    void acceptsInclusiveThresholds() {
+        PromotionGate gate = PromotionGate.builder()
+                .requireMetricAtLeast("f1", 0.90)
+                .requireMetricAtMost("f1", 0.90)
+                .build();
+
+        assertTrue(gate.evaluate(card(0.90, NOW, "sha256:abc", "team"), NOW).passed());
+    }
+
+    @Test
     @DisplayName("reports every failing rule, not only the first")
     void reportsAllFailures() {
         GateResult result = standardGate().build()

@@ -69,12 +69,18 @@ public final class PromotionGate {
             return this;
         }
 
-        /** Fails when the named metric is absent or below {@code threshold}. */
+        /** Fails when the named metric is absent, non-finite, or below {@code threshold}. */
         public Builder requireMetricAtLeast(String metric, double threshold) {
+            if (!Double.isFinite(threshold)) {
+                throw new IllegalArgumentException("threshold must be finite");
+            }
             rules.add((card, now) -> {
                 Optional<Double> value = card.metric(metric);
                 if (value.isEmpty()) {
                     return Optional.of("metric '" + metric + "' is not reported");
+                }
+                if (!Double.isFinite(value.get())) {
+                    return Optional.of("metric '" + metric + "' is not finite");
                 }
                 if (value.get() < threshold) {
                     return Optional.of("%s is %.4f, below the required %.4f"
@@ -85,12 +91,18 @@ public final class PromotionGate {
             return this;
         }
 
-        /** Fails when the named metric is absent or above {@code ceiling}. */
+        /** Fails when the named metric is absent, non-finite, or above {@code ceiling}. */
         public Builder requireMetricAtMost(String metric, double ceiling) {
+            if (!Double.isFinite(ceiling)) {
+                throw new IllegalArgumentException("ceiling must be finite");
+            }
             rules.add((card, now) -> {
                 Optional<Double> value = card.metric(metric);
                 if (value.isEmpty()) {
                     return Optional.of("metric '" + metric + "' is not reported");
+                }
+                if (!Double.isFinite(value.get())) {
+                    return Optional.of("metric '" + metric + "' is not finite");
                 }
                 if (value.get() > ceiling) {
                     return Optional.of("%s is %.4f, above the permitted %.4f"
