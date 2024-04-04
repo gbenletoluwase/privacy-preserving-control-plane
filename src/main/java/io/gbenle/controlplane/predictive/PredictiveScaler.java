@@ -28,8 +28,9 @@ public final class PredictiveScaler {
     private final Forecaster forecaster;
     private final ScalerConfig config;
 
-    private Instant lastScaleUp = Instant.EPOCH;
-    private Instant lastScaleDown = Instant.EPOCH;
+    // No cooldown applies until capacity has changed in the corresponding direction.
+    private Instant lastScaleUp;
+    private Instant lastScaleDown;
 
     public PredictiveScaler(Forecaster forecaster, ScalerConfig config) {
         this.forecaster = Objects.requireNonNull(forecaster, "forecaster");
@@ -59,7 +60,7 @@ public final class PredictiveScaler {
         int target = clamp(required);
 
         if (target > currentReplicas) {
-            if (now.isBefore(lastScaleUp.plus(config.scaleUpCooldown()))) {
+            if (lastScaleUp != null && now.isBefore(lastScaleUp.plus(config.scaleUpCooldown()))) {
                 return hold(now, currentReplicas, peak, "scale-up cooldown active, holding at "
                         + currentReplicas + " (wanted " + target + ")");
             }
@@ -71,7 +72,7 @@ public final class PredictiveScaler {
         }
 
         if (target < currentReplicas) {
-            if (now.isBefore(lastScaleDown.plus(config.scaleDownCooldown()))) {
+            if (lastScaleDown != null && now.isBefore(lastScaleDown.plus(config.scaleDownCooldown()))) {
                 return hold(now, currentReplicas, peak, "scale-down cooldown active, holding at "
                         + currentReplicas + " (wanted " + target + ")");
             }

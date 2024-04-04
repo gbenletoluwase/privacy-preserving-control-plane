@@ -6,6 +6,8 @@ import io.gbenle.controlplane.predictive.ScalerConfig;
 import io.gbenle.controlplane.predictive.ScalingDecision;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -75,21 +77,64 @@ class PredictiveScalerTest {
         assertTrue(decision.rationale().contains("dampened"));
     }
 
-    @Test
-    @DisplayName("holds capacity while the scale-up cooldown is active, then acts once it elapses")
-    void respectsScaleUpCooldown() {
+    @ParameterizedTest
+    @ValueSource(strings = {"1969-12-31T23:59:00Z", "1970-01-01T00:00:00Z", "1970-01-01T00:00:30Z"})
+    @DisplayName("the first scale-up has no cooldown regardless of the evaluation date")
+    void initialScaleUpHasNoCooldown(String timestamp) {
         PredictiveScaler scaler = new PredictiveScaler(new FixedForecaster(1000.0), config());
 
-        ScalingDecision first = scaler.decide(new double[]{1}, 4, 3, T0);
+        ScalingDecision decision = scaler.decide(new double[]{1}, 4, 3, Instant.parse(timestamp));
+
+        assertEquals(12, decision.targetReplicas());
+        assertTrue(decision.changesCapacity());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"1969-12-31T23:59:00Z", "1970-01-01T00:00:00Z", "1970-01-01T00:00:30Z"})
+    @DisplayName("the first scale-down has no cooldown regardless of the evaluation date")
+    void initialScaleDownHasNoCooldown(String timestamp) {
+        PredictiveScaler scaler = new PredictiveScaler(new FixedForecaster(100.0), config());
+
+        ScalingDecision decision = scaler.decide(new double[]{1}, 30, 3, Instant.parse(timestamp));
+
+        assertEquals(20, decision.targetReplicas());
+        assertTrue(decision.changesCapacity());
+    }
+
+    @Test
+    @DisplayName("a scale-up at the epoch starts a cooldown that expires at its exact boundary")
+    void respectsScaleUpCooldownAtEpoch() {
+        PredictiveScaler scaler = new PredictiveScaler(new FixedForecaster(1000.0), config());
+
+        ScalingDecision first = scaler.decide(new double[]{1}, 4, 3, Instant.EPOCH);
         assertEquals(12, first.targetReplicas());
 
-        ScalingDecision tooSoon = scaler.decide(new double[]{1}, 6, 3, T0.plusSeconds(30));
+        Instant expiry = Instant.EPOCH.plus(config().scaleUpCooldown());
+        ScalingDecision tooSoon = scaler.decide(new double[]{1}, 6, 3, expiry.minusNanos(1));
         assertEquals(6, tooSoon.targetReplicas(), "cooldown should pin capacity to current");
         assertFalse(tooSoon.changesCapacity());
         assertTrue(tooSoon.rationale().contains("cooldown"));
 
-        ScalingDecision later = scaler.decide(new double[]{1}, 6, 3, T0.plus(Duration.ofMinutes(5)));
+        ScalingDecision later = scaler.decide(new double[]{1}, 6, 3, expiry);
         assertEquals(12, later.targetReplicas(), "cooldown has elapsed, the scaler may act");
+    }
+
+    @Test
+    @DisplayName("a scale-down at the epoch starts a cooldown that expires at its exact boundary")
+    void respectsScaleDownCooldownAtEpoch() {
+        PredictiveScaler scaler = new PredictiveScaler(new FixedForecaster(100.0), config());
+
+        ScalingDecision first = scaler.decide(new double[]{1}, 30, 3, Instant.EPOCH);
+        assertEquals(20, first.targetReplicas());
+
+        Instant expiry = Instant.EPOCH.plus(config().scaleDownCooldown());
+        ScalingDecision tooSoon = scaler.decide(new double[]{1}, 20, 3, expiry.minusNanos(1));
+        assertEquals(20, tooSoon.targetReplicas());
+        assertFalse(tooSoon.changesCapacity());
+
+        ScalingDecision atExpiry = scaler.decide(new double[]{1}, 20, 3, expiry);
+        assertEquals(14, atExpiry.targetReplicas());
+        assertTrue(atExpiry.changesCapacity());
     }
 
     @Test

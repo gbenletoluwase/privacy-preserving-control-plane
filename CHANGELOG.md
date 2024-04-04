@@ -16,6 +16,7 @@ All notable changes to this project are documented here. The format follows
 - Build enforces JDK 21+ and compiles with `-Xlint:all`.
 
 ### Fixed
+- Allow the first scaling decision at any evaluation timestamp; start cooldowns only after capacity changes.
 - Block non-finite promotion metrics and reject non-finite gate thresholds.
 
 ## [0.1.0] - 2026-10-10
