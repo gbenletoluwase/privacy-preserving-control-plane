@@ -61,6 +61,10 @@ public final class RedactionPipeline {
         return new RedactionPipeline(List.of(new PatternEntityRecognizer()), RedactionPolicy.maskAll());
     }
 
+    /**
+     * @throws IllegalArgumentException if a recognizer returns a null span or a span meeting
+     *         the confidence threshold that does not match the source text and its offsets
+     */
     public RedactionResult redact(String text) {
         if (text == null || text.isEmpty()) {
             return new RedactionResult("", List.of(), Map.of(), List.of());
@@ -69,9 +73,11 @@ public final class RedactionPipeline {
         List<Entity> candidates = new ArrayList<>();
         for (EntityRecognizer recognizer : recognizers) {
             for (Entity entity : recognizer.recognize(text)) {
-                if (entity.confidence() >= minimumConfidence) {
-                    candidates.add(entity);
+                if (entity != null && entity.confidence() < minimumConfidence) {
+                    continue;
                 }
+                validateSpan(entity, text);
+                candidates.add(entity);
             }
         }
         if (candidates.isEmpty()) {
@@ -104,5 +110,14 @@ public final class RedactionPipeline {
         out.append(text, cursor, text.length());
 
         return new RedactionResult(out.toString(), applied, counts, discarded);
+    }
+
+    private static void validateSpan(Entity entity, String source) {
+        if (entity == null || entity.end() > source.length()
+                || entity.text() == null || entity.text().length() != entity.length()
+                || !source.regionMatches(entity.start(), entity.text(), 0, entity.length())) {
+            // A token must be derived from the exact source span, never stale recognizer text.
+            throw new IllegalArgumentException("recognizer span must match its source text and offsets");
+        }
     }
 }

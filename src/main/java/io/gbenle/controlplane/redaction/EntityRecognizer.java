@@ -17,7 +17,8 @@ public interface EntityRecognizer {
 
     /**
      * @param text the text to scan, never null
-     * @return spans found, in any order, possibly overlapping
+     * @return spans found, in any order, possibly overlapping; each span's offsets are UTF-16
+     *         indices into {@code text}, and its text must equal that source substring
      */
     List<Entity> recognize(String text);
 

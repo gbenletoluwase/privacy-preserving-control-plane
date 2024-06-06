@@ -15,6 +15,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RedactionPipelineTest {
@@ -127,5 +128,84 @@ class RedactionPipelineTest {
                 () -> RedactionPolicy.builder()
                         .defaultStrategy(RedactionPolicy.Strategy.TOKENIZE)
                         .build());
+    }
+
+    @Test
+    @DisplayName("rejects stale recognizer text instead of deriving a token for a different value")
+    void rejectsMismatchedSpanText() {
+        RedactionPolicy policy = RedactionPolicy.builder()
+                .defaultStrategy(RedactionPolicy.Strategy.TOKENIZE)
+                .tokenKey(KEY)
+                .build();
+        RedactionPipeline pipeline = new RedactionPipeline(List.of(recognizing(
+                new Entity("EMAIL", 0, 15, "bob@example.com", 0.99, "custom"))), policy);
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> pipeline.redact("ada@example.com"));
+
+        assertFalse(error.getMessage().contains("ada@example.com"));
+        assertFalse(error.getMessage().contains("bob@example.com"));
+    }
+
+    @Test
+    @DisplayName("rejects recognizer offsets outside the source before replacing any text")
+    void rejectsOutOfBoundsSpan() {
+        RedactionPipeline pipeline = new RedactionPipeline(List.of(recognizing(
+                new Entity("EMAIL", 0, 20, "ada@example.com", 0.99, "custom"))),
+                RedactionPolicy.maskAll());
+
+        assertThrows(IllegalArgumentException.class, () -> pipeline.redact("ada@example.com"));
+    }
+
+    @Test
+    @DisplayName("matches custom recognizer spans using source UTF-16 offsets after supplementary characters")
+    void acceptsSourceSpanAfterSupplementaryCharacter() {
+        RedactionPipeline pipeline = new RedactionPipeline(List.of(recognizing(
+                new Entity("EMAIL", 3, 18, "ada@example.com", 0.99, "custom"))),
+                RedactionPolicy.maskAll());
+
+        assertEquals("\uD83D\uDC4B [EMAIL]", pipeline.redact("\uD83D\uDC4B ada@example.com").redactedText());
+    }
+
+    @Test
+    @DisplayName("accepts adjacent valid spans that reach the source boundaries")
+    void acceptsAdjacentBoundarySpans() {
+        RedactionPipeline pipeline = new RedactionPipeline(List.of(recognizing(
+                new Entity("FIRST", 0, 3, "abc", 0.99, "custom"),
+                new Entity("SECOND", 3, 6, "def", 0.99, "custom"))),
+                RedactionPolicy.maskAll());
+
+        RedactionResult result = pipeline.redact("abcdef");
+
+        assertEquals("[FIRST][SECOND]", result.redactedText());
+        assertEquals(2, result.redactedCount());
+        assertTrue(result.discardedSpans().isEmpty());
+    }
+
+    @Test
+    @DisplayName("spans below the confidence threshold remain ignored before source validation")
+    void ignoresLowConfidenceMismatchedSpans() {
+        RedactionPipeline pipeline = new RedactionPipeline(List.of(recognizing(
+                new Entity("EMAIL", 0, 20, "stale", 0.4, "custom"))),
+                RedactionPolicy.maskAll(), 0.8);
+
+        RedactionResult result = pipeline.redact("ada@example.com");
+
+        assertEquals("ada@example.com", result.redactedText());
+        assertEquals(0, result.redactedCount());
+    }
+
+    private static EntityRecognizer recognizing(Entity... entities) {
+        return new EntityRecognizer() {
+            @Override
+            public List<Entity> recognize(String text) {
+                return List.of(entities);
+            }
+
+            @Override
+            public String name() {
+                return "custom";
+            }
+        };
     }
 }
