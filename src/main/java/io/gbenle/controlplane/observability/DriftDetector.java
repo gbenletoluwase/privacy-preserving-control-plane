@@ -76,7 +76,12 @@ public final class DriftDetector {
             int lower = (int) Math.floor(position);
             int upper = (int) Math.ceil(position);
             double fraction = position - lower;
-            edges[i - 1] = sorted[lower] + fraction * (sorted[upper] - sorted[lower]);
+            double left = sorted[lower];
+            double right = sorted[upper];
+            // Subtracting opposite-sign finite extremes can overflow before interpolation.
+            edges[i - 1] = left < 0.0 && right > 0.0
+                    ? (1.0 - fraction) * left + fraction * right
+                    : left + fraction * (right - left);
         }
         return edges;
     }

@@ -16,6 +16,7 @@ All notable changes to this project are documented here. The format follows
 - Build enforces JDK 21+ and compiles with `-Xlint:all`.
 
 ### Fixed
+- Prevent finite extreme observations from overflowing quantile boundaries and hiding distribution drift.
 - Reject accepted recognizer spans whose text or offsets do not match the source before redaction or tokenization.
 - Allow the first scaling decision at any evaluation timestamp; start cooldowns only after capacity changes.
 - Block non-finite promotion metrics and reject non-finite gate thresholds.
