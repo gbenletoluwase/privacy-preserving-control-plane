@@ -1,6 +1,6 @@
 package io.gbenle.controlplane.governance;
 
-import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
@@ -21,6 +21,14 @@ import java.util.Objects;
  *
  * <p>For a durable deployment, persist each record as it is appended and anchor the head
  * hash somewhere outside the same trust boundary.
+ *
+ * <p>Hash input is a big-endian binary encoding: sequence and epoch seconds as 64-bit integers,
+ * nanoseconds as a 32-bit integer, then event, detail and predecessor hash as strings. Each string
+ * has a 32-bit code-unit count followed by its 16-bit Java characters. Lengths preserve field
+ * boundaries even when text contains separators; character encoding preserves unpaired surrogates.
+ * This replaces the earlier delimiter-separated, millisecond-precision encoding, so hashes differ.
+ * The log is in memory and has no import format; externally persisted hashes must retain their
+ * original encoding for verification.
  *
  * <p>This implementation is synchronized and safe for concurrent appends.
  */
@@ -98,11 +106,17 @@ public final class EvidenceLog {
 
     private static String digest(long sequence, Instant at, String event,
                                  String detail, String previousHash) {
-        String payload = sequence + "\u001f" + at.toEpochMilli() + "\u001f"
-                + event + "\u001f" + detail + "\u001f" + previousHash;
         try {
-            byte[] bytes = MessageDigest.getInstance("SHA-256")
-                    .digest(payload.getBytes(StandardCharsets.UTF_8));
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update(ByteBuffer.allocate(Long.BYTES * 2 + Integer.BYTES)
+                    .putLong(sequence)
+                    .putLong(at.getEpochSecond())
+                    .putInt(at.getNano())
+                    .array());
+            updateString(digest, event);
+            updateString(digest, detail);
+            updateString(digest, previousHash);
+            byte[] bytes = digest.digest();
             StringBuilder sb = new StringBuilder(64);
             for (byte b : bytes) {
                 sb.append(String.format("%02x", b));
@@ -110,6 +124,15 @@ public final class EvidenceLog {
             return sb.toString();
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 unavailable", e);
+        }
+    }
+
+    private static void updateString(MessageDigest digest, String value) {
+        digest.update(ByteBuffer.allocate(Integer.BYTES).putInt(value.length()).array());
+        for (int i = 0; i < value.length(); i++) {
+            char character = value.charAt(i);
+            digest.update((byte) (character >>> 8));
+            digest.update((byte) character);
         }
     }
 }
