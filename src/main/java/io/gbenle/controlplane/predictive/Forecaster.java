@@ -13,10 +13,11 @@ public interface Forecaster {
     /**
      * Predicts the next {@code horizon} observations.
      *
-     * @param history evenly spaced observations, oldest first
+     * @param history finite, evenly spaced observations, oldest first
      * @param horizon number of future points to predict, at least 1
      * @return an array of length {@code horizon}, earliest prediction first
-     * @throws IllegalArgumentException if the history is too short for the model
+     * @throws IllegalArgumentException if the history is null, too short for the model,
+     *                                  contains a non-finite observation, or the horizon is less than 1
      */
     double[] forecast(double[] history, int horizon);
 

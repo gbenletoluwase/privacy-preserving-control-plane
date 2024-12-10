@@ -74,6 +74,11 @@ public final class HoltWintersForecaster implements Forecaster {
                             + minimumHistory() + " points), got "
                             + (history == null ? 0 : history.length));
         }
+        for (int i = 0; i < history.length; i++) {
+            if (!Double.isFinite(history[i])) {
+                throw new IllegalArgumentException("history[" + i + "] must be finite");
+            }
+        }
 
         final int n = history.length;
         final int m = seasonLength;

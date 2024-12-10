@@ -36,6 +36,11 @@ public final class EwmaForecaster implements Forecaster {
         if (history == null || history.length == 0) {
             throw new IllegalArgumentException("history must contain at least one point");
         }
+        for (int i = 0; i < history.length; i++) {
+            if (!Double.isFinite(history[i])) {
+                throw new IllegalArgumentException("history[" + i + "] must be finite");
+            }
+        }
         double level = history[0];
         for (int t = 1; t < history.length; t++) {
             level = alpha * history[t] + (1.0 - alpha) * level;

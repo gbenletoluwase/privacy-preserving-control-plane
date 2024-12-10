@@ -5,9 +5,12 @@ import io.gbenle.controlplane.predictive.Forecaster;
 import io.gbenle.controlplane.predictive.HoltWintersForecaster;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -73,6 +76,34 @@ class HoltWintersForecasterTest {
         assertEquals(24, forecaster.minimumHistory());
         assertThrows(IllegalArgumentException.class,
                 () -> forecaster.forecast(syntheticSeries(23), 4));
+    }
+
+    @ParameterizedTest
+    @ValueSource(doubles = {Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY})
+    @DisplayName("rejects non-finite observations in initialization and later seasons")
+    void rejectsNonFiniteHistory(double invalid) {
+        HoltWintersForecaster forecaster = new HoltWintersForecaster(0.3, 0.1, 0.3, SEASON);
+        for (int i = 0; i < 3 * SEASON; i++) {
+            double[] history = syntheticSeries(3 * SEASON);
+            history[i] = invalid;
+
+            IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                    () -> forecaster.forecast(history, SEASON));
+            assertEquals("history[" + i + "] must be finite", error.getMessage());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(doubles = {-100.0, 0.0, 100.0})
+    @DisplayName("finite constant observations remain valid, including zero and negative values")
+    void acceptsFiniteConstantHistory(double value) {
+        HoltWintersForecaster forecaster = new HoltWintersForecaster(0.3, 0.1, 0.3, SEASON);
+        double[] history = new double[2 * SEASON];
+        Arrays.fill(history, value);
+        double[] expected = new double[2 * SEASON];
+        Arrays.fill(expected, value);
+
+        assertArrayEquals(expected, forecaster.forecast(history, expected.length), 1e-9);
     }
 
     @Test

@@ -16,6 +16,7 @@ All notable changes to this project are documented here. The format follows
 - Build enforces JDK 21+ and compiles with `-Xlint:all`.
 
 ### Fixed
+- Reject non-finite observations in EWMA and Holt-Winters histories before generating forecasts.
 - Make evidence hashes unambiguous across text-field boundaries and preserve nanosecond precision. Hashes use a new encoding; previously persisted hashes require their original encoding for verification.
 - Prevent finite extreme observations from overflowing quantile boundaries and hiding distribution drift.
 - Reject accepted recognizer spans whose text or offsets do not match the source before redaction or tokenization.
