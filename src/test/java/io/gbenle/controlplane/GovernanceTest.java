@@ -108,6 +108,53 @@ class GovernanceTest {
     }
 
     @Test
+    @DisplayName("freshness rules reject negative maximum ages at construction")
+    void rejectsNegativeMaximumAge() {
+        assertThrows(IllegalArgumentException.class,
+                () -> PromotionGate.builder().requireFreshness(Duration.ofNanos(-1)));
+    }
+
+    @Test
+    @DisplayName("a future training timestamp blocks promotion and is recorded in the audit log")
+    void blocksFutureTrainingTimestamp() {
+        EvidenceLog log = new EvidenceLog();
+        PromotionGate gate = PromotionGate.builder()
+                .requireFreshness(Duration.ofDays(90))
+                .recordingTo(log)
+                .build();
+
+        GateResult result = gate.evaluate(card(0.94, NOW.plusNanos(1), "sha256:abc", "team"), NOW);
+
+        assertFalse(result.passed());
+        assertEquals(1, result.failures().size());
+        assertTrue(result.failures().get(0).contains("future"));
+        assertEquals(1, log.size());
+        assertTrue(log.records().get(0).detail().contains("blocked"));
+        assertEquals(-1L, log.verify());
+    }
+
+    @Test
+    @DisplayName("freshness includes the maximum age and excludes even one nanosecond beyond it")
+    void respectsFreshnessBoundary() {
+        Duration limit = Duration.ofDays(90);
+        PromotionGate gate = PromotionGate.builder().requireFreshness(limit).build();
+        Instant boundary = NOW.minus(limit);
+
+        assertTrue(gate.evaluate(card(0.94, boundary, "sha256:abc", "team"), NOW).passed());
+        assertFalse(gate.evaluate(card(0.94, boundary.minusNanos(1), "sha256:abc", "team"), NOW).passed());
+    }
+
+    @Test
+    @DisplayName("zero maximum age accepts only a model trained at the evaluation instant")
+    void zeroMaximumAgeRequiresExactTimestamp() {
+        PromotionGate gate = PromotionGate.builder().requireFreshness(Duration.ZERO).build();
+
+        assertTrue(gate.evaluate(card(0.94, NOW, "sha256:abc", "team"), NOW).passed());
+        assertFalse(gate.evaluate(card(0.94, NOW.minusNanos(1), "sha256:abc", "team"), NOW).passed());
+        assertFalse(gate.evaluate(card(0.94, NOW.plusNanos(1), "sha256:abc", "team"), NOW).passed());
+    }
+
+    @Test
     @DisplayName("a gate with no rules is a programming error")
     void emptyGateIsRejected() {
         assertThrows(IllegalStateException.class, () -> PromotionGate.builder().build());

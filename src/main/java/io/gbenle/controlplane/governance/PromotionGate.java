@@ -113,11 +113,20 @@ public final class PromotionGate {
             return this;
         }
 
-        /** Fails when the model was trained longer than {@code maxAge} before evaluation. */
+        /**
+         * Fails when training is in the future or more than {@code maxAge} before evaluation.
+         * The maximum age must be nonnegative; zero requires an exact timestamp match.
+         */
         public Builder requireFreshness(Duration maxAge) {
             Objects.requireNonNull(maxAge, "maxAge");
+            if (maxAge.isNegative()) {
+                throw new IllegalArgumentException("maxAge must be nonnegative");
+            }
             rules.add((card, now) -> {
                 Duration age = Duration.between(card.trainedAt(), now);
+                if (age.isNegative()) {
+                    return Optional.of("model training timestamp is in the future");
+                }
                 if (age.compareTo(maxAge) > 0) {
                     return Optional.of("model is " + age.toDays()
                             + " days old, limit is " + maxAge.toDays() + " days");
