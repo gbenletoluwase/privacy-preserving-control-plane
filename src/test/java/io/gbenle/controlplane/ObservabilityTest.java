@@ -9,8 +9,10 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Random;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ObservabilityTest {
@@ -44,6 +46,28 @@ class ObservabilityTest {
         assertEquals(DriftReport.Severity.SIGNIFICANT, report.severity());
         assertTrue(report.actionable());
         assertTrue(report.psi() > 0.25, "got PSI " + report.psi());
+    }
+
+    @Test
+    @DisplayName("non-finite observations cannot produce a drift assessment in either window")
+    void rejectsNonFiniteDriftObservations() {
+        double[] finite = {0.0, 1.0, 2.0, 3.0};
+        DriftDetector detector = new DriftDetector(2);
+        for (double invalid : new double[]{Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY}) {
+            for (int index = 0; index < finite.length; index++) {
+                double[] invalidWindow = finite.clone();
+                invalidWindow[index] = invalid;
+
+                IllegalArgumentException referenceError = assertThrows(IllegalArgumentException.class,
+                        () -> detector.compare(invalidWindow, finite));
+                IllegalArgumentException currentError = assertThrows(IllegalArgumentException.class,
+                        () -> detector.compare(finite, invalidWindow));
+
+                assertTrue(referenceError.getMessage().contains("reference observation at index " + index));
+                assertTrue(currentError.getMessage().contains("current observation at index " + index));
+            }
+        }
+        assertEquals(0.0, detector.compare(finite, finite.clone()).psi());
     }
 
     @Test
@@ -106,6 +130,48 @@ class ObservabilityTest {
         assertEquals(DriftReport.Severity.MODERATE, DriftReport.classify(0.10));
         assertEquals(DriftReport.Severity.MODERATE, DriftReport.classify(0.249));
         assertEquals(DriftReport.Severity.SIGNIFICANT, DriftReport.classify(0.25));
+    }
+
+    @Test
+    @DisplayName("anomaly thresholds must be positive and finite")
+    void rejectsInvalidAnomalyThresholds() {
+        for (double invalid : new double[]{Double.NaN, Double.POSITIVE_INFINITY,
+                Double.NEGATIVE_INFINITY, 0.0, -1.0}) {
+            assertThrows(IllegalArgumentException.class, () -> new AnomalyMonitor(invalid));
+        }
+
+        assertDoesNotThrow(() -> new AnomalyMonitor(Double.MIN_VALUE));
+        assertDoesNotThrow(() -> new AnomalyMonitor(Double.MAX_VALUE));
+    }
+
+    @Test
+    @DisplayName("non-finite observations are rejected even in series too short to score")
+    void rejectsNonFiniteAnomalyObservations() {
+        AnomalyMonitor monitor = AnomalyMonitor.standard();
+        for (double invalid : new double[]{Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY}) {
+            for (int length : new int[]{1, 2, 5}) {
+                for (int index = 0; index < length; index++) {
+                    double[] series = new double[length];
+                    series[index] = invalid;
+
+                    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                            () -> monitor.scan(series));
+
+                    assertTrue(error.getMessage().contains("series observation at index " + index));
+                }
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("missing and short finite series continue to report no anomalies")
+    void acceptsMissingAndShortFiniteSeries() {
+        AnomalyMonitor monitor = AnomalyMonitor.standard();
+
+        assertTrue(monitor.scan(null).isEmpty());
+        assertTrue(monitor.scan(new double[0]).isEmpty());
+        assertTrue(monitor.scan(new double[]{Double.MAX_VALUE}).isEmpty());
+        assertTrue(monitor.scan(new double[]{-Double.MAX_VALUE, Double.MAX_VALUE}).isEmpty());
     }
 
     @Test

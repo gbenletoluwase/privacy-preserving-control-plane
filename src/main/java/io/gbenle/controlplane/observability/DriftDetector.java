@@ -43,6 +43,8 @@ public final class DriftDetector {
     /**
      * @param reference the baseline sample, typically the training distribution
      * @param current   the recent window to test
+     * @throws IllegalArgumentException if either window is missing, has too few observations,
+     *         or contains a non-finite observation
      */
     public DriftReport compare(double[] reference, double[] current) {
         if (reference == null || reference.length < bins) {
@@ -52,6 +54,8 @@ public final class DriftDetector {
         if (current == null || current.length == 0) {
             throw new IllegalArgumentException("current window must not be empty");
         }
+        requireFinite(reference, "reference");
+        requireFinite(current, "current");
 
         double[] edges = quantileEdges(reference, bins);
         double[] expected = proportions(reference, edges);
@@ -64,6 +68,14 @@ public final class DriftDetector {
             psi += (a - e) * Math.log(a / e);
         }
         return new DriftReport(psi, DriftReport.classify(psi), bins, current.length);
+    }
+
+    private static void requireFinite(double[] values, String window) {
+        for (int i = 0; i < values.length; i++) {
+            if (!Double.isFinite(values[i])) {
+                throw new IllegalArgumentException(window + " observation at index " + i + " must be finite");
+            }
+        }
     }
 
     /** Interior cut points of the reference distribution; the array has {@code bins - 1} entries. */

@@ -40,10 +40,11 @@ public final class AnomalyMonitor {
 
     /**
      * @param threshold score above which an observation is reported; 3.5 is a common choice
+     * @throws IllegalArgumentException if the threshold is not positive and finite
      */
     public AnomalyMonitor(double threshold) {
-        if (!(threshold > 0.0)) {
-            throw new IllegalArgumentException("threshold must be > 0, got " + threshold);
+        if (!Double.isFinite(threshold) || !(threshold > 0.0)) {
+            throw new IllegalArgumentException("threshold must be finite and > 0");
         }
         this.threshold = threshold;
     }
@@ -52,8 +53,23 @@ public final class AnomalyMonitor {
         return new AnomalyMonitor(3.5);
     }
 
+    /**
+     * Returns no anomalies for a missing series or fewer than three finite observations.
+     * Non-null series are validated even when too short to score, so invalid observations
+     * cannot be mistaken for a healthy series.
+     *
+     * @throws IllegalArgumentException if any observation is not finite
+     */
     public List<Anomaly> scan(double[] series) {
-        if (series == null || series.length < 3) {
+        if (series == null) {
+            return List.of();
+        }
+        for (int i = 0; i < series.length; i++) {
+            if (!Double.isFinite(series[i])) {
+                throw new IllegalArgumentException("series observation at index " + i + " must be finite");
+            }
+        }
+        if (series.length < 3) {
             return List.of();
         }
         double median = median(series.clone());

@@ -16,6 +16,7 @@ All notable changes to this project are documented here. The format follows
 - Build enforces JDK 21+ and compiles with `-Xlint:all`.
 
 ### Fixed
+- Reject non-finite observations and anomaly thresholds so invalid monitoring input cannot appear healthy.
 - Validate finite scaler capacity and safety factors and reject missing or negative cooldowns at configuration creation.
 - Reject negative freshness limits and future model-training timestamps while preserving inclusive age boundaries.
 - Reject non-finite observations in EWMA and Holt-Winters histories before generating forecasts.
