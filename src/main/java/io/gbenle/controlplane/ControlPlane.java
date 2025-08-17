@@ -14,6 +14,7 @@ import io.gbenle.controlplane.redaction.RedactionResult;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +38,9 @@ public final class ControlPlane {
     /**
      * One batch of work arriving at the pipeline.
      *
+     * <p>Inputs are copied at construction so later caller mutations cannot change the batch.
+     * Array accessors also return copies, making a batch safe to share between threads.
+     *
      * @param records         raw text records to process
      * @param loadHistory     evenly spaced load observations, oldest first
      * @param currentReplicas replicas currently running
@@ -46,10 +50,30 @@ public final class ControlPlane {
             List<String> records,
             double[] loadHistory,
             int currentReplicas,
-            double[] featureSample) { }
+            double[] featureSample) {
+
+        public Batch {
+            // The redaction pipeline accepts null records as empty text; preserve that contract.
+            records = Collections.unmodifiableList(new ArrayList<>(Objects.requireNonNull(records, "records")));
+            loadHistory = Objects.requireNonNull(loadHistory, "loadHistory").clone();
+            featureSample = Objects.requireNonNull(featureSample, "featureSample").clone();
+        }
+
+        @Override
+        public double[] loadHistory() {
+            return loadHistory.clone();
+        }
+
+        @Override
+        public double[] featureSample() {
+            return featureSample.clone();
+        }
+    }
 
     /**
      * Everything the control plane concluded in one cycle.
+     *
+     * <p>Collection components are immutable snapshots so reports remain stable when shared.
      *
      * @param redacted        the processed records, safe to forward downstream
      * @param entityCounts    how many spans of each type were redacted across the batch
@@ -67,6 +91,12 @@ public final class ControlPlane {
             List<AnomalyMonitor.Anomaly> anomalies,
             GateResult gate,
             String evidenceHead) {
+
+        public CycleReport {
+            redacted = List.copyOf(redacted);
+            entityCounts = Map.copyOf(entityCounts);
+            anomalies = List.copyOf(anomalies);
+        }
 
         public int totalRedactions() {
             return entityCounts.values().stream().mapToInt(Integer::intValue).sum();
