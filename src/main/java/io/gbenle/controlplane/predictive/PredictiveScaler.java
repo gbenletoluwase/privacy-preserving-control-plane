@@ -42,8 +42,11 @@ public final class PredictiveScaler {
      *
      * @param loadHistory     evenly spaced load observations, oldest first
      * @param currentReplicas replicas currently running
-     * @param horizon         how many intervals ahead to protect against
+     * @param horizon         how many intervals ahead to protect against, at least 1
      * @param now             evaluation time, supplied rather than read so this is testable
+     * @throws IllegalArgumentException if the current replica count is negative or the horizon is less than 1
+     * @throws IllegalStateException if the forecaster returns null, the wrong number of predictions,
+     *                               or a non-finite prediction
      */
     public synchronized ScalingDecision decide(
             double[] loadHistory, int currentReplicas, int horizon, Instant now) {
@@ -52,8 +55,20 @@ public final class PredictiveScaler {
         if (currentReplicas < 0) {
             throw new IllegalArgumentException("currentReplicas must be >= 0");
         }
+        if (horizon < 1) {
+            throw new IllegalArgumentException("horizon must be >= 1");
+        }
 
         double[] predicted = forecaster.forecast(loadHistory, horizon);
+        if (predicted == null || predicted.length != horizon) {
+            throw new IllegalStateException("forecaster must return " + horizon + " predictions, got "
+                    + (predicted == null ? "null" : predicted.length));
+        }
+        for (int i = 0; i < predicted.length; i++) {
+            if (!Double.isFinite(predicted[i])) {
+                throw new IllegalStateException("forecaster prediction[" + i + "] must be finite");
+            }
+        }
         double peak = Arrays.stream(predicted).max().orElseThrow();
 
         int required = (int) Math.ceil((peak * config.safetyFactor()) / config.capacityPerReplica());

@@ -7,14 +7,18 @@ import io.gbenle.controlplane.predictive.ScalingDecision;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PredictiveScalerTest {
@@ -33,6 +37,27 @@ class PredictiveScalerTest {
         @Override
         public String name() {
             return "fixed(" + value + ")";
+        }
+    }
+
+    /** Mutable test stub; each instance is used only by its owning test thread. */
+    private static final class StubForecaster implements Forecaster {
+        private double[] prediction;
+        private int calls;
+
+        private StubForecaster(double[] prediction) {
+            this.prediction = prediction;
+        }
+
+        @Override
+        public double[] forecast(double[] history, int horizon) {
+            calls++;
+            return prediction;
+        }
+
+        @Override
+        public String name() {
+            return "stub";
         }
     }
 
@@ -144,5 +169,73 @@ class PredictiveScalerTest {
                 .decide(new double[]{1}, 6, 3, T0);
         assertEquals("fixed(500.0)", decision.forecaster());
         assertEquals(500.0, decision.predictedPeak());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, -1})
+    @DisplayName("a nonpositive horizon is rejected before the forecaster is invoked")
+    void rejectsInvalidHorizonBeforeForecasting(int horizon) {
+        StubForecaster forecaster = new StubForecaster(new double[]{1000.0});
+        PredictiveScaler scaler = new PredictiveScaler(forecaster, config());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> scaler.decide(new double[]{1}, 4, horizon, T0));
+
+        assertEquals(0, forecaster.calls);
+    }
+
+    private static Stream<Arguments> malformedForecasts() {
+        return Stream.of(
+                Arguments.of("null", null),
+                Arguments.of("empty", new double[0]),
+                Arguments.of("short", new double[]{1000.0, 1000.0}),
+                Arguments.of("long", new double[]{1000.0, 1000.0, 1000.0, 1000.0}));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("malformedForecasts")
+    @DisplayName("malformed forecast arrays fail before starting either scaling cooldown")
+    void rejectsMalformedForecasts(String description, double[] prediction) {
+        assertInvalidForecastDoesNotStartCooldown(prediction);
+    }
+
+    @ParameterizedTest
+    @ValueSource(doubles = {Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY})
+    @DisplayName("non-finite values in any forecast position fail without starting either cooldown")
+    void rejectsNonFiniteForecasts(double invalid) {
+        for (int i = 0; i < 3; i++) {
+            double[] prediction = {1000.0, 1000.0, 1000.0};
+            prediction[i] = invalid;
+            assertInvalidForecastDoesNotStartCooldown(prediction);
+        }
+    }
+
+    private static void assertInvalidForecastDoesNotStartCooldown(double[] prediction) {
+        for (boolean scalingUp : new boolean[]{true, false}) {
+            int current = scalingUp ? 4 : 30;
+            StubForecaster forecaster = new StubForecaster(prediction);
+            PredictiveScaler scaler = new PredictiveScaler(forecaster, config());
+            assertThrows(IllegalStateException.class,
+                    () -> scaler.decide(new double[]{1}, current, 3, T0));
+
+            double valid = scalingUp ? 1000.0 : 100.0;
+            forecaster.prediction = new double[]{valid, valid, valid};
+            ScalingDecision recovered = scaler.decide(new double[]{1}, current, 3, T0);
+
+            assertEquals(scalingUp ? 12 : 20, recovered.targetReplicas(),
+                    "an invalid forecast must not delay the next valid scaling decision");
+            assertTrue(recovered.changesCapacity());
+        }
+    }
+
+    @Test
+    @DisplayName("finite negative forecasts remain valid and respect the configured minimum")
+    void acceptsNegativePredictions() {
+        PredictiveScaler scaler = new PredictiveScaler(new FixedForecaster(-100.0), config());
+
+        ScalingDecision decision = scaler.decide(new double[]{1}, 0, 3, T0);
+
+        assertEquals(2, decision.targetReplicas());
+        assertEquals(-100.0, decision.predictedPeak());
     }
 }
