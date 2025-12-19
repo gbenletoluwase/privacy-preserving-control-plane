@@ -1,5 +1,7 @@
 package io.gbenle.controlplane.predictive;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Objects;
@@ -71,8 +73,7 @@ public final class PredictiveScaler {
         }
         double peak = Arrays.stream(predicted).max().orElseThrow();
 
-        int required = (int) Math.ceil((peak * config.safetyFactor()) / config.capacityPerReplica());
-        int target = clamp(required);
+        int target = targetFor(peak);
 
         if (target > currentReplicas) {
             if (lastScaleUp != null && now.isBefore(lastScaleUp.plus(config.scaleUpCooldown()))) {
@@ -114,5 +115,20 @@ public final class PredictiveScaler {
 
     private int clamp(int replicas) {
         return Math.max(config.minReplicas(), Math.min(config.maxReplicas(), replicas));
+    }
+
+    private int targetFor(double peak) {
+        double adjusted = peak * config.safetyFactor();
+        if (Double.isFinite(adjusted)) {
+            return clamp((int) Math.ceil(adjusted / config.capacityPerReplica()));
+        }
+
+        // An overflowing intermediate product can still yield a small replica requirement.
+        // Preserve ordinary floating-point rounding, using exact arithmetic only on overflow.
+        BigDecimal required = new BigDecimal(peak)
+                .multiply(new BigDecimal(config.safetyFactor()))
+                .divide(new BigDecimal(config.capacityPerReplica()), 0, RoundingMode.CEILING);
+        return required.max(BigDecimal.valueOf(config.minReplicas()))
+                .min(BigDecimal.valueOf(config.maxReplicas())).intValueExact();
     }
 }

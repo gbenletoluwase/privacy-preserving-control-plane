@@ -16,6 +16,7 @@ All notable changes to this project are documented here. The format follows
 - Build enforces JDK 21+ and compiles with `-Xlint:all`.
 
 ### Fixed
+- Avoid inflated replica targets when finite load and headroom overflow their intermediate product, preserving ordinary rounding.
 - Validate forecast shape and finite predictions before making scaling decisions or starting cooldowns.
 - Snapshot batch inputs and cycle-report collections so caller mutations cannot change evaluation inputs or recorded results.
 - Reject non-finite observations and anomaly thresholds so invalid monitoring input cannot appear healthy.
